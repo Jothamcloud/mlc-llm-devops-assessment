@@ -95,7 +95,7 @@ This launches an interactive development shell where you can run `./scripts/buil
 
 ## Detailed Documentation
 
-* **[Local Development](https://www.google.com/search?q=docs/local-development.md)**: How to use the Docker container for daily coding.
-* **[CI Pipeline](https://www.google.com/search?q=docs/ci-pipeline.md)**: Deep dive into the GitHub Actions stages.
-* **[Releases & Artifacts](https://www.google.com/search?q=docs/releases.md)**: Information on versioning and how to get the wheels.
+* **[Local Development](docs/local-development.md)**: How to use the Docker container for daily coding.
+* **[CI Pipeline](docs/ci-pipeline.md)**: Deep dive into the GitHub Actions stages.
+* **[Releases & Artifacts](docs/releases.md)**: Information on versioning and how to get the wheels.
 
