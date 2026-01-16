@@ -1,0 +1,74 @@
+name: Linux Build & Test
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  linux-build:
+    runs-on: ubuntu-latest
+    needs: docker-image
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set image name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=dev" >> $GITHUB_ENV
+
+      - name: Pull Docker image
+        run: |
+          docker pull $REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+      - name: Build & package wheels
+        run: |
+          docker run --rm \
+            -v $GITHUB_WORKSPACE:/workspace \
+            $REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+            -lc "bash ./scripts/build.sh"     
+
+      - name: Upload Linux wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-wheels
+          path: mlc-llm/python/dist/*.whl
+
+  linux-test:
+    runs-on: ubuntu-latest
+    needs: linux-build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download Linux wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-wheels
+          path: mlc-llm/dist
+        
+      - name: Set image name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=dev" >> $GITHUB_ENV
+
+      - name: Pull Docker image
+        run: |
+          docker pull $REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+      - name: Run tests
+        run: |
+          docker run --rm \
+            -v $GITHUB_WORKSPACE:/workspace \
+            $REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+            -lc "bash ./scripts/test.sh"

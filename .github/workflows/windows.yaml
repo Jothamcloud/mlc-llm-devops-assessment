@@ -1,0 +1,118 @@
+name: Windows Build & Test
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          activate-environment: mlc
+          channels: conda-forge
+          channel-priority: strict
+          python-version: "3.11"
+
+      - name: Install deps
+        shell: powershell
+        run: |
+          conda install -y cmake rust git git-lfs ccache spirv-headers spirv-tools vulkan-tools
+          conda install -y -c conda-forge clang libvulkan-loader zstd
+          python -m pip install -U pip wheel setuptools
+      
+      - name: Install Vulkan SDK (Windows) - Official Unattended
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+
+          $installer = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+
+          Write-Host "Downloading Vulkan SDK installer..."
+          Invoke-WebRequest `
+            -Uri "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe" `
+            -OutFile $installer
+
+          Write-Host "Installing Vulkan SDK (unattended)..."
+          Start-Process -FilePath $installer -ArgumentList "--accept-licenses --default-answer --confirm-command install" -Wait
+
+          if (!(Test-Path "C:\VulkanSDK")) {
+            throw "C:\VulkanSDK not found after Vulkan install"
+          }
+
+          $sdk = Get-ChildItem "C:\VulkanSDK" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+
+          echo "VULKAN_SDK=$($sdk.FullName)" >> $env:GITHUB_ENV
+          echo "$($sdk.FullName)\Bin" >> $env:GITHUB_PATH
+
+          Write-Host "✅ Vulkan SDK installed at $($sdk.FullName)"
+
+          
+      - name: Verify Vulkan SDK
+        shell: powershell
+        run: |
+          echo "VULKAN_SDK=$env:VULKAN_SDK"
+
+          if (!(Test-Path "$env:VULKAN_SDK\Include\vulkan\vulkan.h")) {
+            throw "vulkan.h not found"
+          }
+
+          if (!(Test-Path "$env:VULKAN_SDK\Lib\vulkan-1.lib")) {
+            throw "vulkan-1.lib not found"
+          }
+
+          echo "✅ Vulkan SDK looks good"
+
+      - name: Build wheel
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-wheels
+          path: mlc-llm/python/dist/*.whl
+
+  windows-test:
+    runs-on: windows-latest
+    needs: windows-build
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-wheels
+          path: mlc-llm/python/dist
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          activate-environment: mlc
+          channels: conda-forge
+          channel-priority: strict
+          python-version: "3.11"
+
+      - name: Install runtime deps
+        shell: powershell
+        run: |
+          conda install -y -c conda-forge clang libvulkan-loader zstd
+          python -m pip install -U pip
+
+      - name: Run tests
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
