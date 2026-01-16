@@ -207,5 +207,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            linux-wheels/*.whl
-            windows-wheels/*.whl
+            linux-wheels/mlc_llm-*.whl
+            windows-wheels/mlc_llm-*.whl
